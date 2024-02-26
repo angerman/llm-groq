@@ -1,6 +1,10 @@
 [project]
 name = "llm-groq"
 version = "0.1"
+dependencies = [
+    "llm",
+    "groq"
+]
 
 [project.entry-points.llm]
 groq = "llm_groq"
