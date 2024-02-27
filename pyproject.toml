@@ -1,10 +1,23 @@
 [project]
 name = "llm-groq"
-version = "0.1"
+version = "0.2"
+
+readme = "README.md"
+authors = [{name = "Moritz Angermann"}]
+license = {text = "Apache-2.0"}
+classifiers = [
+    "License :: OSI Approved :: Apache Software License"
+]
 dependencies = [
     "llm",
     "groq"
 ]
+
+[project.urls]
+Homepage = "https://github.com/angerman/llm-groq"
+Changelog = "https://github.com/angerman/llm-groq/releases"
+Issues = "https://github.com/angerman/llm-groq/issues"
+CI = "https://github.com/angerman/llm-groq/actions"
 
 [project.entry-points.llm]
 groq = "llm_groq"
