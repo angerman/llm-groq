@@ -9,6 +9,7 @@ def register_models(register):
     register(LLMGroq("groq-mixtral"))
 
 class LLMGroq(llm.Model):
+    can_stream = True
     model_map: dict = {
         "groq-llama2": "llama2-70b-4096",
         "groq-mixtral": "mixtral-8x7b-32768",
@@ -46,7 +47,13 @@ class LLMGroq(llm.Model):
         key = llm.get_key("", "groq", "LLM_GROQ_KEY")
         messages = self.build_messages(prompt, conversation)
         client = Groq(api_key=key)
-        chat_completion = client.chat.completions.create(
-            messages=messages, model=self.model_map[self.model_id]
+        resp = client.chat.completions.create(
+            messages=messages, model=self.model_map[self.model_id],
+            stream=stream
         )
-        yield from chat_completion.choices[0].message.content
+        if stream:
+            for chunk in resp:
+                if chunk.choices[0].delta.content:
+                    yield from chunk.choices[0].delta.content
+        else:
+            yield from resp.choices[0].message.content
