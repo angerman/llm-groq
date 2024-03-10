@@ -9,6 +9,7 @@ from typing import Optional, List, Union
 def register_models(register):
     register(LLMGroq("groq-llama2"))
     register(LLMGroq("groq-mixtral"))
+    register(LLMGroq("groq-gemma"))
 
 class LLMGroq(llm.Model):
     can_stream = True
@@ -16,6 +17,7 @@ class LLMGroq(llm.Model):
     model_map: dict = {
         "groq-llama2": "llama2-70b-4096",
         "groq-mixtral": "mixtral-8x7b-32768",
+        "groq-gemma": "gemma-7b-it",
     }
 
     class Options(llm.Options):
