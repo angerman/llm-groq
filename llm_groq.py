@@ -12,12 +12,14 @@ def register_models(register):
     register(LLMGroq("groq-llama3-70b"))
     register(LLMGroq("groq-mixtral"))
     register(LLMGroq("groq-gemma"))
+    register(LLMGroq("groq-gemma2"))
 
 class LLMGroq(llm.Model):
     can_stream = True
 
     model_map: dict = {
         "groq-gemma": "gemma-7b-it",
+        "groq-gemma2": "gemma2-9b-it",
         "groq-llama2": "llama2-70b-4096",
         "groq-llama3": "llama3-8b-8192",
         "groq-llama3-70b": "llama3-70b-8192",
