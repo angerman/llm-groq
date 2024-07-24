@@ -5,14 +5,19 @@ from groq import Groq
 from pydantic import Field
 from typing import Optional, List, Union
 
+
 @llm.hookimpl
 def register_models(register):
     register(LLMGroq("groq-llama2"))
     register(LLMGroq("groq-llama3"))
     register(LLMGroq("groq-llama3-70b"))
+    register(LLMGroq("groq-llama3.1-8b"))
+    register(LLMGroq("groq-llama3.1-70b"))
+    register(LLMGroq("groq-llama3.1-405b"))
     register(LLMGroq("groq-mixtral"))
     register(LLMGroq("groq-gemma"))
     register(LLMGroq("groq-gemma2"))
+
 
 class LLMGroq(llm.Model):
     can_stream = True
@@ -24,6 +29,9 @@ class LLMGroq(llm.Model):
         "groq-llama3": "llama3-8b-8192",
         "groq-llama3-70b": "llama3-70b-8192",
         "groq-mixtral": "mixtral-8x7b-32768",
+        "groq-llama3.1-8b": "llama-3.1-8b-instant",
+        "groq-llama3.1-70b": "llama-3.1-70b-versatile",
+        "groq-llama3.1-405b": "llama-3.1-405b-reasoning",
     }
 
     class Options(llm.Options):
@@ -66,10 +74,10 @@ class LLMGroq(llm.Model):
                 "A stop sequence is a predefined or user-specified text string that"
                 "signals an AI to stop generating content, ensuring its responses"
                 "remain focused and concise. Examples include punctuation marks and"
-                "markers like \"[end]\"."
-                "For this example, we will use \", 6\" so that the llm stops counting at 5."
+                'markers like "[end]".'
+                'For this example, we will use ", 6" so that the llm stops counting at 5.'
                 "If multiple stop values are needed, an array of string may be passed,"
-                "stop=[\", 6\", \", six\", \", Six\"]"
+                'stop=[", 6", ", six", ", Six"]'
             ),
             default=None,
         )
@@ -106,12 +114,13 @@ class LLMGroq(llm.Model):
         messages = self.build_messages(prompt, conversation)
         client = Groq(api_key=key)
         resp = client.chat.completions.create(
-            messages=messages, model=self.model_map[self.model_id],
+            messages=messages,
+            model=self.model_map[self.model_id],
             stream=stream,
             temperature=prompt.options.temperature,
             top_p=prompt.options.top_p,
             max_tokens=prompt.options.max_tokens,
-            stop=prompt.options.stop
+            stop=prompt.options.stop,
         )
         if stream:
             for chunk in resp:
