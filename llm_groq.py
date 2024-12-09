@@ -17,6 +17,7 @@ def register_models(register):
     register(LLMGroq("groq-mixtral"))
     register(LLMGroq("groq-gemma"))
     register(LLMGroq("groq-gemma2"))
+    register(LLMGroq("groq-llama-3.3-70b"))
 
 
 class LLMGroq(llm.Model):
@@ -32,6 +33,7 @@ class LLMGroq(llm.Model):
         "groq-llama3.1-8b": "llama-3.1-8b-instant",
         "groq-llama3.1-70b": "llama-3.1-70b-versatile",
         "groq-llama3.1-405b": "llama-3.1-405b-reasoning",
+        "groq-llama-3.3-70b": "llama-3.3-70b-versatile",
     }
 
     class Options(llm.Options):
@@ -124,7 +126,10 @@ class LLMGroq(llm.Model):
         )
         if stream:
             for chunk in resp:
-                if chunk.choices[0].delta.content:
-                    yield from chunk.choices[0].delta.content
+                try:
+                    if chunk.choices[0].delta.content:
+                        yield from chunk.choices[0].delta.content
+                except TypeError:
+                    breakpoint()
         else:
             yield from resp.choices[0].message.content
