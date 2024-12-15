@@ -126,7 +126,7 @@ class LLMGroq(llm.Model):
         )
         if stream:
             for chunk in resp:
-                if chunk.choices[0] and chunk.choices[0].delta:
+                if chunk.choices[0] and chunk.choices[0].delta.content:
                     yield from chunk.choices[0].delta.content
         else:
             yield from resp.choices[0].message.content
