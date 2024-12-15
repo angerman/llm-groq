@@ -1,5 +1,3 @@
-# [LLM](https://llm.datasette.io/) plugin providing access to [Groqcloud](http://console.groq.com) models.
-# Base off of llm-mistral (https://github.com/simonw/llm-mistral)
 import llm
 from groq import Groq
 from pydantic import Field
