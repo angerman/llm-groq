@@ -22,7 +22,6 @@ def register_models(register):
     for model_id in model_map:
         register(LLMGroq(model_id), LLMAsyncGroq(model_id))
 
-
 class _Options(llm.Options):
     temperature: Optional[float] = Field(
         description=(
@@ -70,7 +69,6 @@ class _Options(llm.Options):
         ),
         default=None,
     )
-
 
 class _Shared:
     def __init__(self, model_id):
