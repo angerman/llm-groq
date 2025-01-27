@@ -49,24 +49,24 @@ def refresh_models():
     )
     response.raise_for_status()
     models = response.json()
-    groq_models.write_text(json.dumps({"data": models["models"]}, indent=2))
-    return models["models"]
+    groq_models.write_text(json.dumps({"models": models["data"]}, indent=2))
+    return models["data"]
 
 
 def get_model_details():
     user_dir = llm.user_dir()
-    default_models = {"data": []}
+    default_models = {"models": []}
     groq_models = user_dir / "groq_models.json"
     if groq_models.exists():
         models = json.loads(groq_models.read_text())
-        return models.get("data", [])
+        return models.get("models", [])
     elif llm.get_key("", "groq", "LLM_GROQ_KEY"):
         try:
             return refresh_models()
         except httpx.HTTPStatusError:
-            return default_models["data"]
+            return default_models["models"]
     else:
-        return default_models["data"]
+        return default_models["models"]
 
 
 @llm.hookimpl
@@ -80,17 +80,16 @@ def register_commands(cli):
         "Refresh the list of available Groq models"
         user_dir = llm.user_dir()
         groq_models = user_dir / "groq_models.json"
+        previous = (
+            {model["id"] for model in json.loads(groq_models.read_text())["models"]}
+            if groq_models.exists()
+            else set()
+        )
         try:
             models = refresh_models()
         except httpx.HTTPStatusError:
             click.echo("Failed to refresh models", err=True)
             return
-
-        previous = (
-            set(json.loads(groq_models.read_text())["data"])
-            if groq_models.exists()
-            else set()
-        )
         current = {model["id"] for model in models}
         added = current - previous
         removed = previous - current
