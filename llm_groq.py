@@ -180,6 +180,7 @@ class _Shared:
         response.set_usage(
             input=usage.get("prompt_tokens"),
             output=usage.get("completion_tokens"),
+            details=usage,
         )
 
 
@@ -201,14 +202,18 @@ class LLMGroq(llm.Model, _Shared):
             stream=stream,
             **prompt.options.dict(),
         )
+        usage = None
 
         try:
             if stream:
                 for chunk in resp:
                     if chunk.choices and chunk.choices[0].delta.content:
                         yield chunk.choices[0].delta.content
+                    if chunk.x_groq and chunk.x_groq.usage:
+                        usage = chunk.x_groq.usage.model_dump()
             else:
                 yield resp.choices[0].message.content
+                usage = resp.usage.model_dump()
         except AttributeError as e:
             if "NoneType" in str(e):
                 response = resp.choices[0].message
@@ -216,8 +221,8 @@ class LLMGroq(llm.Model, _Shared):
             else:
                 raise e
         finally:
-            if getattr(resp, "usage", None):
-                self.set_usage(response, resp.usage)
+            if usage:
+                self.set_usage(response, usage)
 
 
 class LLMAsyncGroq(llm.AsyncModel, _Shared):
@@ -236,14 +241,18 @@ class LLMAsyncGroq(llm.AsyncModel, _Shared):
         resp = await client.chat.completions.create(
             model=self.groq_model_id, messages=messages, stream=stream, **options
         )
+        usage = None
 
         try:
             if stream:
                 async for chunk in resp:
                     if chunk.choices and chunk.choices[0].delta.content:
                         yield chunk.choices[0].delta.content
+                    if chunk.x_groq and chunk.x_groq.usage:
+                        usage = chunk.x_groq.usage.model_dump()
             else:
                 yield resp.choices[0].message.content
+                usage = resp.usage.model_dump()
         except AttributeError as e:
             if "NoneType" in str(e):
                 response = resp.choices[0].message
@@ -251,5 +260,5 @@ class LLMAsyncGroq(llm.AsyncModel, _Shared):
             else:
                 raise e
         finally:
-            if getattr(resp, "usage", None):
-                self.set_usage(response, resp.usage)
+            if usage:
+                self.set_usage(response, usage)
