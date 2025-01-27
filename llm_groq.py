@@ -166,6 +166,9 @@ class _Shared:
 
 class LLMGroq(llm.Model, _Shared):
     can_stream = True
+    needs_key = "groq"
+    key_env_var = "GROQ_API_KEY"
+
     Options = _Options
 
     def execute(self, prompt, stream, response, conversation):
@@ -198,6 +201,9 @@ class LLMGroq(llm.Model, _Shared):
 
 class LLMAsyncGroq(llm.AsyncModel, _Shared):
     can_stream = True
+    needs_key = "groq"
+    key_env_var = "GROQ_API_KEY"
+
     Options = _Options
 
     async def execute(self, prompt, stream, response, conversation):
