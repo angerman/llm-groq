@@ -1,6 +1,6 @@
 [project]
 name = "llm-groq"
-version = "0.6"
+version = "0.7"
 
 readme = "README.md"
 authors = [{name = "Moritz Angermann"}]
