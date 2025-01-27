@@ -8,12 +8,31 @@ from typing import Optional, List, Union
 
 MODEL_ENDPOINT = "https://api.groq.com/openai/v1/models"
 
+OLD_ALIASES: dict = {
+    "groq-gemma2": "gemma2-9b-it",
+    "groq-llama3": "llama3-8b-8192",
+    "groq-llama3-70b": "llama3-70b-8192",
+    "groq-mixtral": "mixtral-8x7b-32768",
+    "groq-llama3.1-8b": "llama-3.1-8b-instant",
+    "groq-llama-3.3-70b": "llama-3.3-70b-versatile",
+}
+OLD_ALIASES_REVERSE: dict = {v: k for k, v in OLD_ALIASES.items()}
+
+
 @llm.hookimpl
 def register_models(register):
     models = get_model_details()
     for model in models:
-        model_id = model["id"]
-        register(LLMGroq(model_id), LLMAsyncGroq(model_id))
+        groq_model_id = model["id"]
+        model_id = "groq/{}".format(groq_model_id)
+        aliases = ()
+        if groq_model_id in OLD_ALIASES_REVERSE:
+            aliases = (OLD_ALIASES_REVERSE[groq_model_id],)
+        register(
+            LLMGroq(model_id, groq_model_id),
+            LLMAsyncGroq(model_id, groq_model_id),
+            aliases=aliases,
+        )
 
 
 def refresh_models():
@@ -67,7 +86,11 @@ def register_commands(cli):
             click.echo("Failed to refresh models", err=True)
             return
 
-        previous = set(json.loads(groq_models.read_text())["data"]) if groq_models.exists() else set()
+        previous = (
+            set(json.loads(groq_models.read_text())["data"])
+            if groq_models.exists()
+            else set()
+        )
         current = {model["id"] for model in models}
         added = current - previous
         removed = previous - current
@@ -124,8 +147,9 @@ class _Options(llm.Options):
 
 
 class _Shared:
-    def __init__(self, model_id):
+    def __init__(self, model_id, groq_model_id):
         self.model_id = model_id
+        self.groq_model_id = groq_model_id
 
     def build_messages(self, prompt, conversation):
         messages = []
@@ -137,8 +161,13 @@ class _Shared:
 
         current_system = None
         for prev_response in conversation.responses:
-            if prev_response.prompt.system and prev_response.prompt.system != current_system:
-                messages.append({"role": "system", "content": prev_response.prompt.system})
+            if (
+                prev_response.prompt.system
+                and prev_response.prompt.system != current_system
+            ):
+                messages.append(
+                    {"role": "system", "content": prev_response.prompt.system}
+                )
                 current_system = prev_response.prompt.system
             messages.append({"role": "user", "content": prev_response.prompt.prompt})
             messages.append({"role": "assistant", "content": prev_response.text()})
@@ -146,16 +175,6 @@ class _Shared:
             messages.append({"role": "system", "content": prompt.system})
         messages.append({"role": "user", "content": prompt.prompt})
         return messages
-
-    def build_body(self, messages, options):
-        return {
-            "model": self.model_id,
-            "messages": messages,
-            "temperature": options.temperature,
-            "top_p": options.top_p,
-            "max_tokens": options.max_tokens,
-            "stop": options.stop,
-        }
 
     def set_usage(self, response, usage):
         response.set_usage(
@@ -174,11 +193,13 @@ class LLMGroq(llm.Model, _Shared):
     def execute(self, prompt, stream, response, conversation):
         key = self.get_key()
         messages = self.build_messages(prompt, conversation)
-        body = self.build_body(messages, prompt.options)
 
         client = Groq(api_key=key)
         resp = client.chat.completions.create(
-            model=self.model_id, messages=messages, stream=stream, **prompt.options.dict()
+            model=self.groq_model_id,
+            messages=messages,
+            stream=stream,
+            **prompt.options.dict(),
         )
 
         try:
@@ -213,7 +234,7 @@ class LLMAsyncGroq(llm.AsyncModel, _Shared):
 
         client = AsyncGroq(api_key=key)
         resp = await client.chat.completions.create(
-            model=self.model_id, messages=messages, stream=stream, **options
+            model=self.groq_model_id, messages=messages, stream=stream, **options
         )
 
         try:
