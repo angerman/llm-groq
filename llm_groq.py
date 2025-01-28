@@ -25,12 +25,13 @@ def register_models(register):
     for model in models:
         groq_model_id = model["id"]
         model_id = "groq/{}".format(groq_model_id)
+        vision = vision = "-vision" in model_id
         aliases = ()
         if groq_model_id in OLD_ALIASES_REVERSE:
             aliases = (OLD_ALIASES_REVERSE[groq_model_id],)
         register(
-            LLMGroq(model_id, groq_model_id),
-            LLMAsyncGroq(model_id, groq_model_id),
+            LLMGroq(model_id, groq_model_id, vision=vision),
+            LLMAsyncGroq(model_id, groq_model_id, vision=vision),
             aliases=aliases,
         )
 
@@ -145,17 +146,39 @@ class _Options(llm.Options):
     )
 
 
+def _attachment(attachment):
+    base64_content = attachment.base64_content()
+    url = f"data:{attachment.resolve_type()};base64,{base64_content}"
+    return {"type": "image_url", "image_url": {"url": url}}
+
+
 class _Shared:
-    def __init__(self, model_id, groq_model_id):
+    def __init__(self, model_id, groq_model_id, vision=False):
         self.model_id = model_id
         self.groq_model_id = groq_model_id
+        self.vision = vision
+        if vision:
+            self.attachment_types = {
+                "image/png",
+                "image/jpeg",
+                "image/gif",
+            }
 
     def build_messages(self, prompt, conversation):
         messages = []
         if not conversation:
             if prompt.system:
                 messages.append({"role": "system", "content": prompt.system})
-            messages.append({"role": "user", "content": prompt.prompt})
+            if prompt.attachments:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [_attachment(a) for a in prompt.attachments]
+                        + [{"type": "text", "text": prompt.prompt}],
+                    }
+                )
+            else:
+                messages.append({"role": "user", "content": prompt.prompt})
             return messages
 
         current_system = None
@@ -168,11 +191,33 @@ class _Shared:
                     {"role": "system", "content": prev_response.prompt.system}
                 )
                 current_system = prev_response.prompt.system
-            messages.append({"role": "user", "content": prev_response.prompt.prompt})
+
+            if prev_response.attachments:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [_attachment(a) for a in prev_response.attachments]
+                        + [{"type": "text", "text": prev_response.prompt.prompt}],
+                    }
+                )
+            else:
+                messages.append(
+                    {"role": "user", "content": prev_response.prompt.prompt}
+                )
             messages.append({"role": "assistant", "content": prev_response.text()})
         if prompt.system and current_system != prompt.system:
             messages.append({"role": "system", "content": prompt.system})
-        messages.append({"role": "user", "content": prompt.prompt})
+
+        if prompt.attachments:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [_attachment(a) for a in prompt.attachments]
+                    + [{"type": "text", "text": prompt.prompt}],
+                }
+            )
+        else:
+            messages.append({"role": "user", "content": prompt.prompt})
         return messages
 
     def set_usage(self, response, usage):
