@@ -204,7 +204,7 @@ class _Shared:
                 messages.append(
                     {"role": "user", "content": prev_response.prompt.prompt}
                 )
-            messages.append({"role": "assistant", "content": prev_response.text()})
+            messages.append({"role": "assistant", "content": prev_response.text_or_raise()})
         if prompt.system and current_system != prompt.system:
             messages.append({"role": "system", "content": prompt.system})
 
