@@ -2,9 +2,10 @@ import click
 import httpx
 import json
 import llm
-from groq import Groq, AsyncGroq
+from groq import Groq, AsyncGroq, NOT_GIVEN
 from pydantic import Field
-from typing import Optional, List, Union
+from pathlib import Path
+from typing import Optional, List, Literal, Union
 
 MODEL_ENDPOINT = "https://api.groq.com/openai/v1/models"
 
@@ -26,15 +27,20 @@ def register_models(register):
     for model in models:
         groq_model_id = model["id"]
         model_id = "groq/{}".format(groq_model_id)
-        vision = vision = "-vision" in model_id
+        vision = "-vision" in model_id
         aliases = ()
         if groq_model_id in OLD_ALIASES_REVERSE:
             aliases = (OLD_ALIASES_REVERSE[groq_model_id],)
-        register(
-            LLMGroq(model_id, groq_model_id, vision=vision),
-            LLMAsyncGroq(model_id, groq_model_id, vision=vision),
-            aliases=aliases,
-        )
+        if "whisper-" in model_id:
+            register(
+                LLMGroqWhisper(model_id, groq_model_id),
+            )
+        else:
+            register(
+                LLMGroq(model_id, groq_model_id, vision=vision),
+                LLMAsyncGroq(model_id, groq_model_id, vision=vision),
+                aliases=aliases,
+            )
 
 
 def refresh_models():
@@ -307,3 +313,87 @@ class LLMAsyncGroq(llm.AsyncModel, _Shared):
         finally:
             if usage:
                 self.set_usage(response, usage)
+
+
+class _WhisperOptions(llm.Options):
+    language: Optional[str] = Field(
+        description="The language of the input audio. Supplying the input language in [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) format will improve accuracy and latency.",
+        default="en",
+    )
+    response_format: Optional[Literal["json", "text", "verbose_json"]] = Field(
+        description="The format of the transcript output, in one of these options: `json`, `text`, or `verbose_json`.",
+        default="text",
+    )
+    temperature: Optional[float] = Field(
+        description=(
+            "The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. If set to 0, the model will use [log probability](https://en.wikipedia.org/wiki/Log_probability) to automatically increase the temperature until certain thresholds are hit."
+        ),
+        ge=0,
+        le=1,
+        default=None,
+    )
+    timestamp_granularities: Optional[List[Literal["word", "segment"]]] = Field(
+        description="The timestamp granularities to populate for this transcription. `response_format` must be set `verbose_json` to use timestamp granularities. Either or both of these options are supported: `word`, or `segment`. Note: There is no additional latency for segment timestamps, but generating word timestamps incurs additional latency.",
+        default=None,
+    )
+
+
+class LLMGroqWhisper(llm.KeyModel):
+    """Model for Groq's Whisper audio transcription."""
+    needs_key = "groq"
+    key_env_var = "GROQ_API_KEY"
+    can_stream = True
+    attachment_types = {
+        "audio/flac",
+        "audio/mp3",
+        "video/mp4",
+        "audio/mpeg",
+        "audio/mpga",
+        "audio/m4a",
+        "audio/aac",
+        "audio/ogg",
+        "application/ogg",
+        "audio/wav",
+        "video/webm",
+    }
+    Options = _WhisperOptions
+
+    def __init__(self, model_id, groq_model_id):
+        self.model_id = model_id
+        self.groq_model_id = groq_model_id
+
+    def _check_attachments(self, prompt):
+        if not prompt.attachments:
+            raise llm.ModelError("This model requires an audio attachment.")
+
+        attachment = prompt.attachments.pop()
+        if attachment.resolve_type() not in self.attachment_types:
+             raise llm.ModelError(f"Invalid attachment type: {attachment.resolve_type()}. Expected one of {self.attachment_types}")
+        
+        return attachment
+
+    def _get_options(self, prompt, attachment):
+        return dict(
+                model=self.groq_model_id,
+                file=(Path(attachment.path)) if attachment.path else NOT_GIVEN,
+                url=attachment.url if attachment.url else NOT_GIVEN,
+                prompt=prompt.prompt if prompt else NOT_GIVEN,
+                **prompt.options.model_dump(exclude_none=True)
+            )
+
+    def execute(self, prompt, stream, response, conversation, key):
+        attachment = self._check_attachments(prompt)
+        client = Groq(api_key=key)
+        try:
+            options = self._get_options(prompt, attachment)
+            if stream:
+                with client.audio.transcriptions.with_streaming_response.create(**options) as transcription:
+                    for chunk in transcription.iter_text():
+                        yield chunk
+            else:
+                yield client.audio.transcriptions.create(**options)
+            # Note: Groq transcription API doesn't seem to provide token usage easily.
+            # response.set_usage(...) could be added if usage info becomes available.
+
+        except Exception as e:
+            raise llm.ModelError(f"Groq API error during transcription: {e}") from e
