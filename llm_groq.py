@@ -15,6 +15,7 @@ OLD_ALIASES: dict = {
     "groq-mixtral": "mixtral-8x7b-32768",
     "groq-llama3.1-8b": "llama-3.1-8b-instant",
     "groq-llama-3.3-70b": "llama-3.3-70b-versatile",
+    "groq-kimi-k2": "moonshotai/kimi-k2-instruct",
 }
 OLD_ALIASES_REVERSE: dict = {v: k for k, v in OLD_ALIASES.items()}
 
