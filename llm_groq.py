@@ -46,10 +46,10 @@ def register_models(register):
 def refresh_models():
     user_dir = llm.user_dir()
     groq_models = user_dir / "groq_models.json"
-    key = llm.get_key("", "groq", "LLM_GROQ_KEY")
+    key = llm.get_key("", "groq", "GROQ_API_KEY")
     if not key:
         raise click.ClickException(
-            "You must set the 'groq' key or the LLM_GROQ_KEY environment variable."
+            "You must set the 'groq' key or the GROQ_API_KEY environment variable."
         )
     response = httpx.get(
         MODEL_ENDPOINT,
@@ -68,7 +68,7 @@ def get_model_details():
     if groq_models.exists():
         models = json.loads(groq_models.read_text())
         return models.get("models", [])
-    elif llm.get_key("", "groq", "LLM_GROQ_KEY"):
+    elif llm.get_key("", "groq", "GROQ_API_KEY"):
         try:
             return refresh_models()
         except httpx.HTTPStatusError:
