@@ -27,7 +27,7 @@ def register_models(register):
     for model in models:
         groq_model_id = model["id"]
         model_id = "groq/{}".format(groq_model_id)
-        vision = "-vision" in model_id
+        vision = "image" in model.get("input_modalities", [])
         aliases = ()
         if groq_model_id in OLD_ALIASES_REVERSE:
             aliases = (OLD_ALIASES_REVERSE[groq_model_id],)
