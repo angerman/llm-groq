@@ -20,6 +20,8 @@ llm keys set groq
 ```
 <paste key here>
 ```
+`GROQ_API_KEY` works too. `LLM_GROQ_KEY` is only a fallback for model discovery; running a model uses the `groq` key or `GROQ_API_KEY`. Run `llm groq refresh` to load the model list.
+
 You can now access the three Mistral hosted models: `groq-llama2` and `groq-mixtral`.
 
 To run a prompt through `groq-mixtral`:

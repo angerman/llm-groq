@@ -2,6 +2,7 @@ import click
 import httpx
 import json
 import llm
+import os
 from groq import Groq, AsyncGroq, NOT_GIVEN
 from pydantic import Field
 from pathlib import Path
@@ -20,6 +21,32 @@ OLD_ALIASES: dict = {
 }
 OLD_ALIASES_REVERSE: dict = {v: k for k, v in OLD_ALIASES.items()}
 
+_HINT = (
+    "No Groq models available. Set a key with `llm keys set groq` "
+    "or GROQ_API_KEY, then run `llm groq refresh`. "
+    "LLM_GROQ_KEY is only a fallback for model discovery, not for running models."
+)
+_hinted = False
+
+
+def get_groq_api_key():
+    return llm.get_key("", "groq", "GROQ_API_KEY") or os.environ.get("LLM_GROQ_KEY") or None
+
+
+def model_supports_vision(model):
+    modalities = model.get("input_modalities")
+    if modalities is None:
+        return "-vision" in (model.get("id") or "")
+    return isinstance(modalities, (list, tuple)) and "image" in modalities
+
+
+def _hint():
+    global _hinted
+    if _hinted:
+        return
+    _hinted = True
+    click.echo(_HINT, err=True)
+
 
 @llm.hookimpl
 def register_models(register):
@@ -27,7 +54,7 @@ def register_models(register):
     for model in models:
         groq_model_id = model["id"]
         model_id = "groq/{}".format(groq_model_id)
-        vision = "-vision" in model_id
+        vision = model_supports_vision(model)
         aliases = ()
         if groq_model_id in OLD_ALIASES_REVERSE:
             aliases = (OLD_ALIASES_REVERSE[groq_model_id],)
@@ -46,11 +73,9 @@ def register_models(register):
 def refresh_models():
     user_dir = llm.user_dir()
     groq_models = user_dir / "groq_models.json"
-    key = llm.get_key("", "groq", "LLM_GROQ_KEY")
+    key = get_groq_api_key()
     if not key:
-        raise click.ClickException(
-            "You must set the 'groq' key or the LLM_GROQ_KEY environment variable."
-        )
+        raise click.ClickException(_HINT)
     response = httpx.get(
         MODEL_ENDPOINT,
         headers={"Authorization": f"Bearer {key}"},
@@ -63,18 +88,15 @@ def refresh_models():
 
 def get_model_details():
     user_dir = llm.user_dir()
-    default_models = {"models": []}
     groq_models = user_dir / "groq_models.json"
     if groq_models.exists():
         models = json.loads(groq_models.read_text())
         return models.get("models", [])
-    elif llm.get_key("", "groq", "LLM_GROQ_KEY"):
-        try:
-            return refresh_models()
-        except httpx.HTTPStatusError:
-            return default_models["models"]
-    else:
-        return default_models["models"]
+    try:
+        return refresh_models()
+    except (click.ClickException, httpx.HTTPError):
+        _hint()
+        return []
 
 
 @llm.hookimpl
@@ -95,9 +117,8 @@ def register_commands(cli):
         )
         try:
             models = refresh_models()
-        except httpx.HTTPStatusError:
-            click.echo("Failed to refresh models", err=True)
-            return
+        except httpx.HTTPError as e:
+            raise click.ClickException(f"Failed to refresh models: {e}")
         current = {model["id"] for model in models}
         added = current - previous
         removed = previous - current
@@ -169,6 +190,7 @@ class _Shared:
                 "image/png",
                 "image/jpeg",
                 "image/gif",
+                "image/webp",
             }
 
     def build_messages(self, prompt, conversation):
