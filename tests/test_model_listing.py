@@ -1,25 +1,39 @@
+import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest import mock
 
 import llm_groq
 
 
-class ModelListingTests(unittest.TestCase):
-    def test_get_model_details_uses_groq_api_key_env_var(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with (
-                patch.object(llm_groq.llm, "user_dir", return_value=Path(tmpdir)),
-                patch.object(llm_groq.llm, "get_key", return_value="test-key") as get_key,
-                patch.object(
-                    llm_groq, "refresh_models", return_value=[{"id": "llama-3.1-8b-instant"}]
-                ),
-            ):
-                details = llm_groq.get_model_details()
+class GroqTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        p = mock.patch.dict(os.environ)
+        p.start()
+        self.addCleanup(p.stop)
+        os.environ["LLM_USER_PATH"] = self.tmp.name
+        os.environ.pop("GROQ_API_KEY", None)
+        os.environ.pop("LLM_GROQ_KEY", None)
 
-        self.assertEqual(details, [{"id": "llama-3.1-8b-instant"}])
-        get_key.assert_called_once_with("", "groq", "GROQ_API_KEY")
+    def test_key_fallback_order(self):
+        os.environ["LLM_GROQ_KEY"] = "legacy"
+        self.assertEqual(llm_groq.get_groq_api_key(), "legacy")
+        os.environ["GROQ_API_KEY"] = "primary"
+        self.assertEqual(llm_groq.get_groq_api_key(), "primary")
+        (Path(self.tmp.name) / "keys.json").write_text(json.dumps({"groq": "stored"}))
+        self.assertEqual(llm_groq.get_groq_api_key(), "stored")
+
+    def test_vision_detection(self):
+        vision = llm_groq.model_supports_vision
+        self.assertTrue(vision({"id": "scout", "input_modalities": ["text", "image"]}))
+        self.assertTrue(vision({"id": "llama-3.2-11b-vision-preview"}))
+        self.assertTrue(vision({"id": "x-vision", "input_modalities": None}))
+        self.assertFalse(vision({"id": "foo-vision", "input_modalities": ["text"]}))
+        self.assertFalse(vision({"id": "foo-vision", "input_modalities": []}))
 
 
 if __name__ == "__main__":
